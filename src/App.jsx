@@ -22,6 +22,7 @@ import {
   ChevronDown,
   Plus,
   Pencil,
+  Handshake,
 } from "lucide-react";
 
 import { styles, globalCss } from "./styles";
@@ -31,6 +32,8 @@ import { downloadFile } from "./lib/download";
 import { daysUntil, formatDateBR } from "./lib/dates";
 import { mapImportedRow, rehydrateRows } from "./lib/importRow";
 import { buildManualRow, rowToManualForm, EMPTY_MANUAL_FORM } from "./lib/manualRow";
+import { acordoDaysLeft, isRevisaoPendente } from "./lib/acordos";
+import { useAcordos } from "./hooks/useAcordos";
 
 import { StatCard } from "./components/StatCard";
 import { DetailField } from "./components/DetailField";
@@ -39,6 +42,8 @@ import { AgendaView } from "./components/AgendaView";
 import { HistoryView } from "./components/HistoryView";
 import { DayListModal } from "./components/DayListModal";
 import { ProcessFormModal } from "./components/ProcessFormModal";
+import { AcordosBoard } from "./components/AcordosBoard";
+import { AcordoFormModal } from "./components/AcordoFormModal";
 
 export function App() {
   const [loading, setLoading] = useState(true);
@@ -66,6 +71,9 @@ export function App() {
   const [showBellMenu, setShowBellMenu] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
   const [formModal, setFormModal] = useState(null); // { editingRow: row|null }
+  const [acordoModal, setAcordoModal] = useState(null); // { acordo: acordo|null }
+  const acordosApi = useAcordos(() => setSaveError(true));
+  const { acordos, config: acordosConfig } = acordosApi;
 
   const importInputRef = useRef(null);
   const backupInputRef = useRef(null);
@@ -212,6 +220,8 @@ export function App() {
       concluded,
       settings,
       importInfo,
+      acordos,
+      acordosConfig,
     };
     const date = new Date().toISOString().slice(0, 10);
     downloadFile(`backup-painel-prazos-${date}.json`, JSON.stringify(payload, null, 2), "application/json");
@@ -229,7 +239,7 @@ export function App() {
       }
       if (
         !window.confirm(
-          "Isso vai substituir os dados atuais do painel (processos importados, cadastrados manualmente, prioridades, notas e histórico) pelos do backup. Deseja continuar?",
+          "Isso vai substituir os dados atuais do painel (processos importados, cadastrados manualmente, prioridades, notas, histórico e acordos) pelos do backup. Deseja continuar?",
         )
       ) {
         return;
@@ -244,6 +254,8 @@ export function App() {
       setImportInfo(data.importInfo || null);
       setDiffWarning(null);
       setSelected(new Set());
+      // Backups anteriores ao quadro de acordos não têm esses campos; não apagar os atuais.
+      if ("acordos" in data) acordosApi.replaceAll(data.acordos || [], data.acordosConfig || {});
       await Promise.all([
         saveItem("imported-rows", restoredRows),
         saveItem("manual-rows", restoredManualRows),
@@ -279,6 +291,22 @@ export function App() {
     if (!(await saveItem("manual-rows", next))) setSaveError(true);
   }
 
+  function handleSaveAcordo(data) {
+    acordosApi.saveAcordo(data);
+    setAcordoModal(null);
+  }
+
+  function handleDeleteAcordo(id) {
+    if (!window.confirm("Excluir este acordo do quadro?")) return;
+    acordosApi.removeAcordo(id);
+    setAcordoModal(null);
+  }
+
+  function handleConcluirAcordo(acordo) {
+    if (!window.confirm(`Concluir o acordo do processo ${acordo.numero}? Ele sairá do quadro.`)) return;
+    acordosApi.removeAcordo(acordo.id);
+  }
+
   // Processos importados e cadastrados manualmente compõem uma única lista de
   // trabalho; em caso de mesmo número, o cadastro manual prevalece na exibição.
   const allRows = useMemo(() => {
@@ -287,6 +315,24 @@ export function App() {
     manualRows.forEach((row) => byNumero.set(row.numero, row));
     return Array.from(byNumero.values());
   }, [importedRows, manualRows]);
+
+  const processosByNumero = useMemo(() => new Map(allRows.map((r) => [r.numero, r])), [allRows]);
+
+  const acordoAlertas = useMemo(() => {
+    const vencidos = [];
+    const hoje = [];
+    let amanha = 0;
+    acordos.forEach((a) => {
+      const diff = acordoDaysLeft(a);
+      if (diff === null) return;
+      if (diff < 0) vencidos.push(a);
+      else if (diff === 0) hoje.push(a);
+      else if (diff === 1) amanha += 1;
+    });
+    return { vencidos, hoje, amanha };
+  }, [acordos]);
+
+  const revisaoPendente = isRevisaoPendente(acordosConfig, acordos.length);
 
   const concludedNumeros = useMemo(() => new Set(concluded.map((c) => c.numero)), [concluded]);
   const estadoOptions = useMemo(() => Array.from(new Set(allRows.map((r) => r.estado).filter(Boolean))).sort(), [allRows]);
@@ -381,14 +427,28 @@ export function App() {
       rows.forEach((r) => lines.push(`- ${r.numero} — ${r.autor} — ${r.texto || "sem descrição"}`));
       lines.push("");
     }
+    const etapaNome = new Map(acordosConfig.etapas.map((e) => [e.id, e.nome]));
+    function acordoSection(title, list) {
+      if (list.length === 0) return;
+      lines.push(`${title} (${list.length})`);
+      list.forEach((a) => lines.push(`- ${a.numero} — ${etapaNome.get(a.etapaId) || ""} — ${a.motivo}`));
+      lines.push("");
+    }
     section("Prazos vencidos", urgentSummary.vencidos);
     section("Vencem hoje", urgentSummary.hoje);
     section("Marcados como urgentes", urgentSummary.urgentesExtra);
-    if (urgentSummary.vencidos.length + urgentSummary.hoje.length + urgentSummary.urgentesExtra.length === 0) {
-      lines.push("Nada urgente por enquanto.");
-    }
+    acordoSection("Acordos com prazo vencido", acordoAlertas.vencidos);
+    acordoSection("Acordos que vencem hoje", acordoAlertas.hoje);
+    if (revisaoPendente) lines.push("Revisão periódica dos acordos pendente.", "");
+    const total =
+      urgentSummary.vencidos.length +
+      urgentSummary.hoje.length +
+      urgentSummary.urgentesExtra.length +
+      acordoAlertas.vencidos.length +
+      acordoAlertas.hoje.length;
+    if (total === 0 && !revisaoPendente) lines.push("Nada urgente por enquanto.");
     return lines.join("\n");
-  }, [urgentSummary]);
+  }, [urgentSummary, acordoAlertas, acordosConfig.etapas, revisaoPendente]);
 
   async function handleCopyDayList() {
     try {
@@ -458,7 +518,14 @@ export function App() {
   }
 
   const allVisibleSelected = filteredRows.length > 0 && filteredRows.every((r) => selected.has(r.numero));
-  const bellTotal = bellStats.hoje + bellStats.amanha + bellStats.vencidos;
+  const bellTotal =
+    bellStats.hoje +
+    bellStats.amanha +
+    bellStats.vencidos +
+    acordoAlertas.vencidos.length +
+    acordoAlertas.hoje.length +
+    acordoAlertas.amanha +
+    (revisaoPendente ? 1 : 0);
 
   function openCreateForm() {
     setFormModal({ editingRow: null });
@@ -469,7 +536,7 @@ export function App() {
   }
 
   return (
-    <div style={styles.app}>
+    <div className="pp-app" style={styles.app}>
       <style>{globalCss}</style>
 
       <div style={styles.header}>
@@ -508,6 +575,24 @@ export function App() {
                       <div style={{ fontSize: 13, color: "var(--ink)" }}>
                         <strong>{bellStats.amanha}</strong> vence(m) amanhã
                       </div>
+                    )}
+                    {acordoAlertas.vencidos.length > 0 && (
+                      <div style={{ fontSize: 13, color: "var(--danger)" }}>
+                        <strong>{acordoAlertas.vencidos.length}</strong> acordo(s) com prazo vencido
+                      </div>
+                    )}
+                    {acordoAlertas.hoje.length > 0 && (
+                      <div style={{ fontSize: 13, color: "var(--warn)" }}>
+                        <strong>{acordoAlertas.hoje.length}</strong> acordo(s) vence(m) hoje
+                      </div>
+                    )}
+                    {acordoAlertas.amanha > 0 && (
+                      <div style={{ fontSize: 13, color: "var(--ink)" }}>
+                        <strong>{acordoAlertas.amanha}</strong> acordo(s) vence(m) amanhã
+                      </div>
+                    )}
+                    {revisaoPendente && (
+                      <div style={{ fontSize: 13, color: "var(--info)" }}>Revisão periódica dos acordos pendente</div>
                     )}
                   </div>
                 )}
@@ -598,6 +683,9 @@ export function App() {
         </button>
         <button className="pp-btn" style={activeTab === "historico" ? styles.tabActive : {}} onClick={() => setActiveTab("historico")}>
           <History size={14} /> Histórico ({concluded.length})
+        </button>
+        <button className="pp-btn" style={activeTab === "acordos" ? styles.tabActive : {}} onClick={() => setActiveTab("acordos")}>
+          <Handshake size={14} /> Acordos ({acordos.length})
         </button>
       </div>
 
@@ -848,8 +936,24 @@ export function App() {
             </div>
           )}
         </>
-      ) : (
+      ) : activeTab === "historico" ? (
         <HistoryView concluded={concluded} onReopen={handleReopen} />
+      ) : (
+        <AcordosBoard
+          acordos={acordos}
+          config={acordosConfig}
+          processos={processosByNumero}
+          alertDays={settings.alertDays}
+          printable={!showDayList}
+          revisaoPendente={revisaoPendente}
+          onOpenForm={(acordo) => setAcordoModal({ acordo })}
+          onMove={acordosApi.moveAcordo}
+          onToggleDestaque={acordosApi.toggleDestaque}
+          onConcluir={handleConcluirAcordo}
+          onUpdateConfig={acordosApi.updateConfig}
+          onUpdateEtapaCor={acordosApi.updateEtapaCor}
+          onMarcarRevisado={acordosApi.marcarRevisado}
+        />
       )}
 
       {showDayList && (
@@ -863,6 +967,17 @@ export function App() {
           onSave={handleSaveManualRow}
           onDelete={() => handleDeleteManualRow(formModal.editingRow.numero)}
           onClose={() => setFormModal(null)}
+        />
+      )}
+
+      {acordoModal && (
+        <AcordoFormModal
+          acordo={acordoModal.acordo}
+          etapas={acordosConfig.etapas}
+          processos={processosByNumero}
+          onSave={handleSaveAcordo}
+          onDelete={() => handleDeleteAcordo(acordoModal.acordo.id)}
+          onClose={() => setAcordoModal(null)}
         />
       )}
     </div>

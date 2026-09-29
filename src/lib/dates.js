@@ -36,6 +36,14 @@ export function daysUntil(value) {
   return Math.round((target - today) / 86400000);
 }
 
+// "aaaa-mm-dd" via new Date() seria lido como UTC e cairia no dia anterior no Brasil.
+export function parseISODateLocal(iso) {
+  if (!iso) return null;
+  const [year, month, day] = iso.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return isNaN(date.getTime()) ? null : date;
+}
+
 export function isoToBRDate(iso) {
   if (!iso) return null;
   const [year, month, day] = iso.split("-");

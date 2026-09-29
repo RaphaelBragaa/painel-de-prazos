@@ -57,11 +57,45 @@ export const globalCss = `
     padding:8px; font-family:var(--sans); font-size:13px; resize:vertical;
   }
   ::placeholder { color: #9AA1AB; }
+  .pp-app { padding: 28px 32px 60px; }
+  .pp-board { display:flex; gap:12px; overflow-x:auto; padding:4px 2px 14px; align-items:flex-start; }
+  .pp-column {
+    flex:0 0 250px; background:#E9ECF0; border-radius:10px; padding:10px 10px 14px;
+    min-height:180px;
+  }
+  .pp-postit {
+    position:relative; padding:14px 12px 8px; border-radius:3px; cursor:grab;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 6px 12px rgba(0,0,0,.07);
+    color:var(--ink);
+  }
+  .pp-postit::before {
+    content:""; position:absolute; top:-5px; left:50%; transform:translateX(-50%);
+    width:11px; height:11px; border-radius:50%; background:#D9486B;
+    box-shadow: 0 1px 2px rgba(0,0,0,.35);
+  }
+  .pp-postit:active { cursor:grabbing; }
+  .pp-icon-btn {
+    display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px;
+    border:1px solid rgba(27,36,48,.18); background:rgba(255,255,255,.55); border-radius:5px;
+    cursor:pointer; color:var(--ink);
+  }
+  .pp-icon-btn:disabled { opacity:.35; cursor:default; }
+  .pp-color { width:20px; height:20px; padding:0; border:1px solid rgba(27,36,48,.25); border-radius:4px; background:none; cursor:pointer; flex-shrink:0; }
+  .pp-color::-webkit-color-swatch-wrapper { padding:0; }
+  .pp-color::-webkit-color-swatch { border:none; border-radius:3px; }
+  @media (max-width: 640px) {
+    .pp-app { padding: 16px 16px 40px; }
+    .pp-column { flex-basis: 78vw; }
+  }
   @media print {
     body * { visibility: hidden; }
     .pp-printable, .pp-printable * { visibility: visible; }
     .pp-printable { position: absolute; top: 0; left: 0; width: 100%; box-shadow: none; border: none; }
     .pp-no-print { display: none !important; }
+    .pp-board { flex-wrap: wrap; overflow: visible; }
+    .pp-column { break-inside: avoid; }
+    .pp-postit { break-inside: avoid; box-shadow: none; border: 1px solid rgba(0,0,0,.15); }
+    .pp-postit, .pp-column { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 `;
 
@@ -70,7 +104,6 @@ export const styles = {
     minHeight: "100vh",
     background: "var(--bg, #F4F5F7)",
     fontFamily: "var(--sans)",
-    padding: "28px 32px 60px",
     color: "var(--ink, #1B2430)",
   },
   header: {
@@ -225,7 +258,7 @@ export const styles = {
     marginBottom: 14,
     flexWrap: "wrap",
   },
-  tableWrap: { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" },
+  tableWrap: { background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, overflowX: "auto" },
   detailGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14, padding: "14px 4px" },
   emptyState: { padding: "60px 20px", textAlign: "center", color: "var(--muted)", fontSize: 14 },
   emptyImport: {
@@ -244,4 +277,60 @@ export const styles = {
   },
   formField: { display: "flex", flexDirection: "column", gap: 4 },
   formLabel: { fontSize: 11.5, color: "var(--muted)", fontWeight: 600 },
+  boardHeader: {
+    display: "flex",
+    alignItems: "flex-end",
+    gap: 16,
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  objetivoBox: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    background: "#FFF3A3",
+    borderRadius: 4,
+    padding: "8px 12px",
+    flex: "1 1 260px",
+    maxWidth: 420,
+    boxShadow: "0 1px 2px rgba(0,0,0,.08), 0 4px 10px rgba(0,0,0,.05)",
+  },
+  columnHeader: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 8,
+    fontSize: 12.5,
+    fontWeight: 600,
+    lineHeight: 1.35,
+    color: "var(--ink)",
+    minHeight: 36,
+    marginBottom: 6,
+  },
+  columnCount: {
+    fontSize: 11.5,
+    color: "var(--muted)",
+    background: "#fff",
+    borderRadius: 100,
+    padding: "1px 8px",
+  },
+  postitMotivo: {
+    fontSize: 13,
+    marginTop: 8,
+    lineHeight: 1.4,
+    whiteSpace: "pre-wrap",
+    overflow: "hidden",
+    display: "-webkit-box",
+    WebkitLineClamp: 5,
+    WebkitBoxOrient: "vertical",
+  },
+  postitActions: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 },
+  boardFooter: { display: "flex", gap: 16, flexWrap: "wrap", marginTop: 18, alignItems: "flex-start" },
+  revisaoBox: {
+    background: "var(--info-soft)",
+    border: "1px solid #C6DBEC",
+    borderRadius: 8,
+    padding: "12px 14px",
+    minWidth: 220,
+  },
 };
