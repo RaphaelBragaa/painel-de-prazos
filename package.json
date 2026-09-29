@@ -1,0 +1,19 @@
+{
+  "name": "painel-de-prazos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Painel de prazos processuais - importacao de planilha e cadastro manual",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --serve"
+  },
+  "dependencies": {
+    "lucide-react": "^0.469.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2"
+  }
+}
